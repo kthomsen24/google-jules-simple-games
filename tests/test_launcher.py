@@ -3,6 +3,7 @@ import tkinter as tk
 from main import GameLauncher
 from games.snake import SnakeGame
 from games.breakout import BreakoutGame
+from games.wordle import WordleGame
 
 
 class TestGameLauncher(unittest.TestCase):
@@ -27,6 +28,13 @@ class TestGameLauncher(unittest.TestCase):
         # Launch Breakout
         self.app.start_breakout()
         self.assertIsInstance(self.app.current_frame, BreakoutGame)
+
+        # Return to menu
+        self.app.show_menu()
+
+        # Launch Wordle
+        self.app.start_wordle()
+        self.assertIsInstance(self.app.current_frame, WordleGame)
 
 
 if __name__ == "__main__":
