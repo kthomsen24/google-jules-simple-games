@@ -63,9 +63,36 @@ class TestWordleGame(unittest.TestCase):
             self.game.process_input(char)
         self.assertEqual(self.game.current_guess, "APPLE")
 
+    def test_out_of_order_slot_insertion(self):
+        self.game.secret_word = "APPLE"
+        # Select slot 3 (fourth letter, index 3)
+        self.game.on_slot_click(0, 3)
+        self.assertEqual(self.game.selected_slot, 3)
+
+        # Type 'L' into slot 3
+        self.game.process_input("L")
+        self.assertEqual(self.game.current_guess_slots, ["", "", "", "L", ""])
+        self.assertIsNone(self.game.selected_slot)
+        self.assertTrue(self.game.manual_insertion_done)
+
+    def test_overwrite_on_typing_after_manual_insertion(self):
+        self.game.secret_word = "APPLE"
+        # Place 'L' into 4th slot
+        self.game.on_slot_click(0, 3)
+        self.game.process_input("L")
+        self.assertEqual(self.game.current_guess_slots, ["", "", "", "L", ""])
+
+        # Now user starts typing a full guess "WORLD"
+        for char in "WORLD":
+            self.game.process_input(char)
+
+        self.assertEqual(self.game.current_guess, "WORLD")
+        self.assertFalse(self.game.manual_insertion_done)
+
     def test_win_condition(self):
         self.game.secret_word = "APPLE"
-        self.game.current_guess = "APPLE"
+        for char in "APPLE":
+            self.game.process_input(char)
         self.game.process_input("ENTER")
 
         self.assertTrue(self.game.game_won)
@@ -79,12 +106,14 @@ class TestWordleGame(unittest.TestCase):
         self.game.secret_word = "APPLE"
 
         # Attempt 1
-        self.game.current_guess = "WRONG"
+        for char in "WRONG":
+            self.game.process_input(char)
         self.game.process_input("ENTER")
         self.assertFalse(self.game.game_over)
 
         # Attempt 2
-        self.game.current_guess = "WRONG"
+        for char in "WRONG":
+            self.game.process_input(char)
         self.game.process_input("ENTER")
         self.assertTrue(self.game.game_over)
         self.assertFalse(self.game.game_won)
