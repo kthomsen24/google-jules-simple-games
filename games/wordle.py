@@ -1,0 +1,390 @@
+import random
+import tkinter as tk
+from tkinter import messagebox
+
+# Default game parameters
+DEFAULT_WORD_LENGTH = 5
+DEFAULT_MAX_ATTEMPTS = 6
+
+# Tile background colors according to Wordle feedback
+COLOR_CORRECT = "#538d4e"    # Green
+COLOR_PRESENT = "#b59f3b"    # Yellow
+COLOR_ABSENT = "#3a3a3c"     # Dark Gray
+COLOR_DEFAULT = "#121213"    # Dark background for empty/editing tiles
+COLOR_BORDER = "#3a3a3c"     # Grid border color
+COLOR_TEXT = "#ffffff"       # Text color
+
+# Simple built-in word lists per word length (all uppercase)
+WORD_DICTIONARY = {
+    3: ["CAT", "DOG", "SUN", "HAT", "BUS", "MAP", "PEN", "FLY", "RED", "BOX", "CUP", "BAG", "FOX", "WIN", "KEY"],
+    4: ["WORD", "GAME", "PLAY", "CODE", "COOL", "FIRE", "BLUE", "STAR", "FISH", "MOON", "RAIN", "TIME", "MIND", "BEAR", "TREE"],
+    5: ["APPLE", "BRAIN", "CHAIR", "DANCE", "EAGLE", "FLAME", "GRAPE", "HOUSE", "LIGHT", "MUSIC", "PLANT", "SNAKE", "TABLE", "WATER", "WORLD", "REACT", "SMART", "FLASH", "CLOUD", "PIANO"],
+    6: ["BANANA", "CASTLE", "DRAGON", "FLOWER", "PLANET", "ROCKET", "SILVER", "SUMMER", "WINTER", "BRIDGE", "GUITAR", "PURPLE", "FOREST", "SPRING", "MONKEY"],
+    7: ["ACADEMY", "DIAMOND", "KINGDOM", "MONSTER", "PICTURE", "RAINBOW", "SUNRISE", "FREEDOM", "JACKET", "PERFECT", "JOURNEY", "SILENCE", "STUDENT", "WELCOME", "SUCCESS"],
+    8: ["BUILDING", "COMPUTER", "ELEPHANT", "FOOTBALL", "MOUNTAIN", "SATELLITE", "SUNFLOWER", "TREASURE", "UNIVERSE", "BEAUTIFUL", "HOSPITAL", "LANGUAGE", "QUESTION", "STRENGTH", "TOGETHER"]
+}
+
+
+class WordleGame(tk.Frame):
+    def __init__(self, parent, return_to_menu_callback=None, word_length=DEFAULT_WORD_LENGTH, max_attempts=DEFAULT_MAX_ATTEMPTS):
+        super().__init__(parent, bg="#121213")
+        self.parent = parent
+        self.return_to_menu_callback = return_to_menu_callback
+
+        self.word_length = word_length
+        self.max_attempts = max_attempts
+
+        self.secret_word = ""
+        self.attempts = []  # List of guessed words
+        self.current_guess = ""
+        self.game_over = False
+        self.game_won = False
+
+        # Virtual Keyboard key statuses: letter -> color
+        self.key_status = {}
+
+        self.setup_ui()
+        self.reset_game()
+
+    def setup_ui(self):
+        self.pack(fill=tk.BOTH, expand=True)
+
+        # Header / Controls Frame
+        self.header_frame = tk.Frame(self, bg="#2c3e50")
+        self.header_frame.pack(fill=tk.X, side=tk.TOP)
+
+        title_label = tk.Label(
+            self.header_frame,
+            text="WORDLE",
+            font=("Helvetica", 16, "bold"),
+            fg="#ecf0f1",
+            bg="#2c3e50",
+            padx=10,
+            pady=5,
+        )
+        title_label.pack(side=tk.LEFT)
+
+        if self.return_to_menu_callback:
+            self.back_btn = tk.Button(
+                self.header_frame,
+                text="Main Menu",
+                command=self.return_to_menu,
+                bg="#e74c3c",
+                fg="white",
+                font=("Helvetica", 10, "bold"),
+                relief=tk.FLAT,
+                padx=8,
+            )
+            self.back_btn.pack(side=tk.RIGHT, padx=10, pady=5)
+
+        self.restart_btn = tk.Button(
+            self.header_frame,
+            text="Restart",
+            command=self.reset_game,
+            bg="#3498db",
+            fg="white",
+            font=("Helvetica", 10, "bold"),
+            relief=tk.FLAT,
+            padx=8,
+        )
+        self.restart_btn.pack(side=tk.RIGHT, padx=5, pady=5)
+
+        # Customization Panel
+        self.custom_frame = tk.Frame(self, bg="#121213")
+        self.custom_frame.pack(fill=tk.X, pady=10)
+
+        length_label = tk.Label(
+            self.custom_frame,
+            text="Word Length:",
+            font=("Helvetica", 10, "bold"),
+            fg="#ecf0f1",
+            bg="#121213",
+        )
+        length_label.pack(side=tk.LEFT, padx=(15, 5))
+
+        self.length_var = tk.IntVar(value=self.word_length)
+        self.length_spin = tk.Spinbox(
+            self.custom_frame,
+            from_=3,
+            to=8,
+            textvariable=self.length_var,
+            width=3,
+            font=("Helvetica", 10),
+            command=self.apply_custom_settings,
+        )
+        self.length_spin.pack(side=tk.LEFT, padx=(0, 15))
+
+        attempts_label = tk.Label(
+            self.custom_frame,
+            text="Max Attempts:",
+            font=("Helvetica", 10, "bold"),
+            fg="#ecf0f1",
+            bg="#121213",
+        )
+        attempts_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.attempts_var = tk.IntVar(value=self.max_attempts)
+        self.attempts_spin = tk.Spinbox(
+            self.custom_frame,
+            from_=1,
+            to=10,
+            textvariable=self.attempts_var,
+            width=3,
+            font=("Helvetica", 10),
+            command=self.apply_custom_settings,
+        )
+        self.attempts_spin.pack(side=tk.LEFT)
+
+        self.apply_btn = tk.Button(
+            self.custom_frame,
+            text="Apply & New Game",
+            command=self.apply_custom_settings,
+            bg="#2ecc71",
+            fg="white",
+            font=("Helvetica", 9, "bold"),
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+        )
+        self.apply_btn.pack(side=tk.LEFT, padx=15)
+
+        # Grid Container
+        self.grid_container = tk.Frame(self, bg="#121213")
+        self.grid_container.pack(expand=True, pady=10)
+
+        # Onscreen Keyboard Container
+        self.keyboard_frame = tk.Frame(self, bg="#121213")
+        self.keyboard_frame.pack(side=tk.BOTTOM, pady=15)
+
+        self.bind_events()
+
+    def bind_events(self):
+        self.parent.bind("<Key>", self.handle_keypress)
+
+    def unbind_events(self):
+        self.parent.unbind("<Key>")
+
+    def apply_custom_settings(self):
+        try:
+            length = int(self.length_var.get())
+            attempts = int(self.attempts_var.get())
+            if 3 <= length <= 8 and 1 <= attempts <= 10:
+                self.word_length = length
+                self.max_attempts = attempts
+                self.reset_game()
+        except ValueError:
+            pass
+
+    def select_secret_word(self):
+        words = WORD_DICTIONARY.get(self.word_length, WORD_DICTIONARY[5])
+        return random.choice(words).upper()
+
+    def reset_game(self):
+        self.secret_word = self.select_secret_word()
+        self.attempts = []
+        self.current_guess = ""
+        self.game_over = False
+        self.game_won = False
+        self.key_status = {}
+
+        self.rebuild_grid()
+        self.rebuild_keyboard()
+
+    def rebuild_grid(self):
+        for widget in self.grid_container.winfo_children():
+            widget.destroy()
+
+        self.grid_labels = []
+        for r in range(self.max_attempts):
+            row_labels = []
+            row_frame = tk.Frame(self.grid_container, bg="#121213")
+            row_frame.pack(pady=2)
+            for c in range(self.word_length):
+                lbl = tk.Label(
+                    row_frame,
+                    text="",
+                    font=("Helvetica", 18, "bold"),
+                    width=2,
+                    height=1,
+                    fg=COLOR_TEXT,
+                    bg=COLOR_DEFAULT,
+                    bd=2,
+                    relief=tk.SOLID,
+                    highlightbackground=COLOR_BORDER,
+                    highlightthickness=1,
+                )
+                lbl.pack(side=tk.LEFT, padx=2)
+                row_labels.append(lbl)
+            self.grid_labels.append(row_labels)
+
+    def rebuild_keyboard(self):
+        for widget in self.keyboard_frame.winfo_children():
+            widget.destroy()
+
+        self.key_buttons = {}
+        rows = [
+            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+            ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACKSPACE"]
+        ]
+
+        for row in rows:
+            r_frame = tk.Frame(self.keyboard_frame, bg="#121213")
+            r_frame.pack(pady=2)
+            for key in row:
+                disp_text = "⌫" if key == "BACKSPACE" else key
+                btn = tk.Button(
+                    r_frame,
+                    text=disp_text,
+                    font=("Helvetica", 10, "bold"),
+                    fg="white",
+                    bg="#818384",
+                    activebackground="#a0a0a0",
+                    activeforeground="white",
+                    relief=tk.RAISED,
+                    bd=1,
+                    padx=6 if len(key) > 1 else 10,
+                    pady=6,
+                    command=lambda k=key: self.process_input(k),
+                )
+                btn.pack(side=tk.LEFT, padx=2)
+                self.key_buttons[key] = btn
+
+    def handle_keypress(self, event):
+        if self.game_over:
+            return
+
+        if event.keysym == "Return":
+            self.process_input("ENTER")
+        elif event.keysym == "BackSpace":
+            self.process_input("BACKSPACE")
+        elif event.char and event.char.isalpha():
+            char = event.char.upper()
+            if len(char) == 1 and "A" <= char <= "Z":
+                self.process_input(char)
+
+    def process_input(self, key):
+        if self.game_over:
+            return
+
+        if key == "ENTER":
+            self.submit_guess()
+        elif key == "BACKSPACE":
+            if len(self.current_guess) > 0:
+                self.current_guess = self.current_guess[:-1]
+                self.update_current_row_display()
+        else:
+            if len(self.current_guess) < self.word_length:
+                self.current_guess += key
+                self.update_current_row_display()
+
+    def update_current_row_display(self):
+        row_idx = len(self.attempts)
+        if row_idx >= self.max_attempts:
+            return
+
+        for c in range(self.word_length):
+            lbl = self.grid_labels[row_idx][c]
+            if c < len(self.current_guess):
+                lbl.config(text=self.current_guess[c])
+            else:
+                lbl.config(text="")
+
+    def evaluate_guess(self, guess, secret):
+        """
+        Evaluate guess against secret word.
+        Returns list of colors corresponding to each tile.
+        """
+        res = [COLOR_ABSENT] * self.word_length
+        secret_chars = list(secret)
+        guess_chars = list(guess)
+
+        # First pass: green (correct position)
+        for i in range(self.word_length):
+            if guess_chars[i] == secret_chars[i]:
+                res[i] = COLOR_CORRECT
+                secret_chars[i] = None
+                guess_chars[i] = None
+
+        # Second pass: yellow (present in secret word)
+        for i in range(self.word_length):
+            if guess_chars[i] is not None and guess_chars[i] in secret_chars:
+                res[i] = COLOR_PRESENT
+                secret_chars[secret_chars.index(guess_chars[i])] = None
+
+        return res
+
+    def submit_guess(self):
+        if len(self.current_guess) != self.word_length:
+            return
+
+        guess = self.current_guess
+        row_idx = len(self.attempts)
+        self.attempts.append(guess)
+
+        colors = self.evaluate_guess(guess, self.secret_word)
+
+        # Update Grid Tiles for current row
+        for c in range(self.word_length):
+            lbl = self.grid_labels[row_idx][c]
+            lbl.config(bg=colors[c], fg="#ffffff")
+
+            # Update key statuses
+            letter = guess[c]
+            current_status = self.key_status.get(letter, COLOR_DEFAULT)
+            # Precedence: Correct > Present > Absent
+            if colors[c] == COLOR_CORRECT:
+                self.key_status[letter] = COLOR_CORRECT
+            elif colors[c] == COLOR_PRESENT and current_status != COLOR_CORRECT:
+                self.key_status[letter] = COLOR_PRESENT
+            elif colors[c] == COLOR_ABSENT and current_status not in (COLOR_CORRECT, COLOR_PRESENT):
+                self.key_status[letter] = COLOR_ABSENT
+
+        self.update_keyboard_colors()
+
+        if guess == self.secret_word:
+            self.game_won = True
+            self.game_over = True
+            self.show_game_result(True)
+        elif len(self.attempts) >= self.max_attempts:
+            self.game_over = True
+            self.show_game_result(False)
+        else:
+            self.current_guess = ""
+
+    def update_keyboard_colors(self):
+        for letter, color in self.key_status.items():
+            if letter in self.key_buttons:
+                self.key_buttons[letter].config(bg=color)
+
+    def show_game_result(self, won):
+        row_idx = min(len(self.attempts), self.max_attempts) - 1
+        if won:
+            msg = f"Splendid! You guessed '{self.secret_word}' in {len(self.attempts)} attempt(s)."
+        else:
+            msg = f"Game Over! The word was '{self.secret_word}'."
+
+        # Show message over grid container bottom or popup
+        res_label = tk.Label(
+            self,
+            text=msg,
+            font=("Helvetica", 12, "bold"),
+            fg="#2ecc71" if won else "#e74c3c",
+            bg="#121213",
+            pady=5,
+        )
+        res_label.pack(side=tk.BOTTOM, pady=5)
+
+    def return_to_menu(self):
+        self.unbind_events()
+        self.destroy()
+        if self.return_to_menu_callback:
+            self.return_to_menu_callback()
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.title("Wordle")
+    root.geometry("500x650")
+    game = WordleGame(root)
+    root.mainloop()
