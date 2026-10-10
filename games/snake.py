@@ -98,8 +98,11 @@ class SnakeGame(tk.Frame):
             self.parent.unbind(key)
 
     def change_direction(self, new_dir):
-        # Prevent 180 degree turns
-        if (new_dir[0] + self.next_direction[0] != 0) or (new_dir[1] + self.next_direction[1] != 0):
+        # Prevent 180 degree turns relative to current movement direction AND pending direction
+        is_opposite_curr = (new_dir[0] + self.direction[0] == 0) and (new_dir[1] + self.direction[1] == 0)
+        is_opposite_next = (new_dir[0] + self.next_direction[0] == 0) and (new_dir[1] + self.next_direction[1] == 0)
+
+        if not is_opposite_curr and not is_opposite_next:
             self.next_direction = new_dir
 
     def spawn_food(self):
