@@ -23,11 +23,18 @@ class TestSnakeGame(unittest.TestCase):
 
     def test_direction_change(self):
         self.game.direction = RIGHT
+        self.game.next_direction = RIGHT
         self.game.change_direction(UP)
         self.assertEqual(self.game.next_direction, UP)
 
-        # 180 turn should be ignored
+        # 180 turn relative to next_direction should be ignored
         self.game.change_direction(DOWN)
+        self.assertEqual(self.game.next_direction, UP)
+
+        # Rapid turn check: direction is RIGHT, player pressed UP then LEFT before tick
+        # next_direction became UP
+        # Player now presses LEFT (opposite to current direction RIGHT)
+        self.game.change_direction(LEFT)
         self.assertEqual(self.game.next_direction, UP)
 
     def test_movement_and_food_eat(self):

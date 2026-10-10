@@ -12,6 +12,7 @@ COLOR_PRESENT = "#b59f3b"    # Yellow
 COLOR_ABSENT = "#3a3a3c"     # Dark Gray
 COLOR_DEFAULT = "#121213"    # Dark background for empty/editing tiles
 COLOR_BORDER = "#3a3a3c"     # Grid border color
+COLOR_SELECTED = "#3498db"   # Border color for selected slot
 COLOR_TEXT = "#ffffff"       # Text color
 
 # Simple built-in word lists per word length (all uppercase)
@@ -20,7 +21,7 @@ WORD_DICTIONARY = {
     4: ["WORD", "GAME", "PLAY", "CODE", "COOL", "FIRE", "BLUE", "STAR", "FISH", "MOON", "RAIN", "TIME", "MIND", "BEAR", "TREE"],
     5: ["APPLE", "BRAIN", "CHAIR", "DANCE", "EAGLE", "FLAME", "GRAPE", "HOUSE", "LIGHT", "MUSIC", "PLANT", "SNAKE", "TABLE", "WATER", "WORLD", "REACT", "SMART", "FLASH", "CLOUD", "PIANO"],
     6: ["BANANA", "CASTLE", "DRAGON", "FLOWER", "PLANET", "ROCKET", "SILVER", "SUMMER", "WINTER", "BRIDGE", "GUITAR", "PURPLE", "FOREST", "SPRING", "MONKEY"],
-    7: ["ACADEMY", "DIAMOND", "KINGDOM", "MONSTER", "PICTURE", "RAINBOW", "SUNRISE", "FREEDOM", "JACKET", "PERFECT", "JOURNEY", "SILENCE", "STUDENT", "WELCOME", "SUCCESS"],
+    7: ["ACADEMY", "DIAMOND", "KINGDOM", "MONSTER", "PICTURE", "RAINBOW", "SUNRISE", "FREEDOM", "CAPTAIN", "PERFECT", "JOURNEY", "SILENCE", "STUDENT", "WELCOME", "SUCCESS"],
     8: ["BUILDING", "COMPUTER", "ELEPHANT", "FOOTBALL", "MOUNTAIN", "SATELLITE", "SUNFLOWER", "TREASURE", "UNIVERSE", "BEAUTIFUL", "HOSPITAL", "LANGUAGE", "QUESTION", "STRENGTH", "TOGETHER"]
 }
 
@@ -36,7 +37,10 @@ class WordleGame(tk.Frame):
 
         self.secret_word = ""
         self.attempts = []  # List of guessed words
-        self.current_guess = ""
+        self.current_guess_slots = [""] * self.word_length
+        self.selected_slot = None
+        self.manual_insertion_done = False
+
         self.game_over = False
         self.game_won = False
 
@@ -45,6 +49,17 @@ class WordleGame(tk.Frame):
 
         self.setup_ui()
         self.reset_game()
+
+    @property
+    def current_guess(self):
+        return "".join(self.current_guess_slots)
+
+    @current_guess.setter
+    def current_guess(self, value):
+        self.current_guess_slots = [""] * self.word_length
+        for i, char in enumerate(value[:self.word_length]):
+            self.current_guess_slots[i] = char.upper()
+        self.update_current_row_display()
 
     def setup_ui(self):
         self.pack(fill=tk.BOTH, expand=True)
@@ -182,7 +197,9 @@ class WordleGame(tk.Frame):
     def reset_game(self):
         self.secret_word = self.select_secret_word()
         self.attempts = []
-        self.current_guess = ""
+        self.current_guess_slots = [""] * self.word_length
+        self.selected_slot = None
+        self.manual_insertion_done = False
         self.game_over = False
         self.game_won = False
         self.key_status = {}
@@ -212,10 +229,23 @@ class WordleGame(tk.Frame):
                     relief=tk.SOLID,
                     highlightbackground=COLOR_BORDER,
                     highlightthickness=1,
+                    cursor="hand2",
                 )
                 lbl.pack(side=tk.LEFT, padx=2)
+                lbl.bind("<Button-1>", lambda e, row=r, slot=c: self.on_slot_click(row, slot))
                 row_labels.append(lbl)
             self.grid_labels.append(row_labels)
+
+    def on_slot_click(self, row, slot):
+        if self.game_over or row != len(self.attempts):
+            return
+
+        if self.selected_slot == slot:
+            self.selected_slot = None
+        else:
+            self.selected_slot = slot
+
+        self.update_current_row_display()
 
     def rebuild_keyboard(self):
         for widget in self.keyboard_frame.winfo_children():
@@ -270,13 +300,36 @@ class WordleGame(tk.Frame):
         if key == "ENTER":
             self.submit_guess()
         elif key == "BACKSPACE":
-            if len(self.current_guess) > 0:
-                self.current_guess = self.current_guess[:-1]
-                self.update_current_row_display()
-        else:
-            if len(self.current_guess) < self.word_length:
-                self.current_guess += key
-                self.update_current_row_display()
+            if self.manual_insertion_done:
+                self.current_guess_slots = [""] * self.word_length
+                self.manual_insertion_done = False
+                self.selected_slot = None
+            elif self.selected_slot is not None:
+                self.current_guess_slots[self.selected_slot] = ""
+                self.selected_slot = None
+            else:
+                for c in range(self.word_length - 1, -1, -1):
+                    if self.current_guess_slots[c] != "":
+                        self.current_guess_slots[c] = ""
+                        break
+            self.update_current_row_display()
+        else:  # A-Z Letter input
+            if self.manual_insertion_done and self.selected_slot is None:
+                # User starts typing after manual insertion -> overwrite attempt
+                self.current_guess_slots = [""] * self.word_length
+                self.manual_insertion_done = False
+                self.current_guess_slots[0] = key
+            elif self.selected_slot is not None:
+                self.current_guess_slots[self.selected_slot] = key
+                self.selected_slot = None
+                self.manual_insertion_done = True
+            else:
+                # Standard append mode: find first empty slot
+                for c in range(self.word_length):
+                    if self.current_guess_slots[c] == "":
+                        self.current_guess_slots[c] = key
+                        break
+            self.update_current_row_display()
 
     def update_current_row_display(self):
         row_idx = len(self.attempts)
@@ -285,10 +338,13 @@ class WordleGame(tk.Frame):
 
         for c in range(self.word_length):
             lbl = self.grid_labels[row_idx][c]
-            if c < len(self.current_guess):
-                lbl.config(text=self.current_guess[c])
+            letter = self.current_guess_slots[c]
+            lbl.config(text=letter)
+
+            if c == self.selected_slot:
+                lbl.config(highlightbackground=COLOR_SELECTED, highlightthickness=2)
             else:
-                lbl.config(text="")
+                lbl.config(highlightbackground=COLOR_BORDER, highlightthickness=1)
 
     def evaluate_guess(self, guess, secret):
         """
@@ -315,10 +371,10 @@ class WordleGame(tk.Frame):
         return res
 
     def submit_guess(self):
-        if len(self.current_guess) != self.word_length:
+        if not all(len(s) == 1 for s in self.current_guess_slots):
             return
 
-        guess = self.current_guess
+        guess = "".join(self.current_guess_slots)
         row_idx = len(self.attempts)
         self.attempts.append(guess)
 
@@ -327,7 +383,7 @@ class WordleGame(tk.Frame):
         # Update Grid Tiles for current row
         for c in range(self.word_length):
             lbl = self.grid_labels[row_idx][c]
-            lbl.config(bg=colors[c], fg="#ffffff")
+            lbl.config(bg=colors[c], fg="#ffffff", highlightbackground=COLOR_BORDER, highlightthickness=1)
 
             # Update key statuses
             letter = guess[c]
@@ -350,7 +406,9 @@ class WordleGame(tk.Frame):
             self.game_over = True
             self.show_game_result(False)
         else:
-            self.current_guess = ""
+            self.current_guess_slots = [""] * self.word_length
+            self.selected_slot = None
+            self.manual_insertion_done = False
 
     def update_keyboard_colors(self):
         for letter, color in self.key_status.items():
