@@ -43,14 +43,40 @@ class TestSixDegreesGame(unittest.TestCase):
         self.assertEqual(self.game.attempts_used, 1)
         self.assertEqual(len(self.game.chain), 2)
         self.assertEqual(self.game.chain[-1], "Guido van Rossum")
+        self.assertIn("Chain Length: 1 / Max: 6", self.game.chain_count_label.cget("text"))
 
-    def test_undo_step(self):
+    def test_undo_step_decrements_attempts(self):
         self.game.chain = ["Python (programming language)", "Guido van Rossum"]
+        self.game.attempts_used = 1
         self.game.update_game_state()
 
         self.game.undo_step()
         self.assertEqual(len(self.game.chain), 1)
+        self.assertEqual(self.game.attempts_used, 0)
         self.assertEqual(self.game.chain[0], "Python (programming language)")
+        self.assertIn("Chain Length: 0 / Max: 6", self.game.chain_count_label.cget("text"))
+
+    def test_link_list_sorting(self):
+        self.game.chain = ["Python (programming language)"]
+        self.game.update_game_state()
+
+        # Check default article order
+        article_order_list = list(self.game.links_listbox.get(0, tk.END))
+
+        # Test Alphabetical (A-Z)
+        self.game.on_sort_change("Alphabetical (A-Z)")
+        az_list = list(self.game.links_listbox.get(0, tk.END))
+        self.assertEqual(az_list, sorted(article_order_list))
+
+        # Test Alphabetical (Z-A)
+        self.game.on_sort_change("Alphabetical (Z-A)")
+        za_list = list(self.game.links_listbox.get(0, tk.END))
+        self.assertEqual(za_list, sorted(article_order_list, reverse=True))
+
+        # Return to Article Order
+        self.game.on_sort_change("Article Order")
+        restored_list = list(self.game.links_listbox.get(0, tk.END))
+        self.assertEqual(restored_list, article_order_list)
 
     def test_win_condition(self):
         self.game.start_page = "Python (programming language)"
