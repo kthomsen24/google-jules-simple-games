@@ -4,6 +4,7 @@ from main import GameLauncher
 from games.snake import SnakeGame
 from games.breakout import BreakoutGame
 from games.wordle import WordleGame
+from games.six_degrees import SixDegreesGame
 
 
 class TestGameLauncher(unittest.TestCase):
@@ -35,6 +36,14 @@ class TestGameLauncher(unittest.TestCase):
         # Launch Wordle
         self.app.start_wordle()
         self.assertIsInstance(self.app.current_frame, WordleGame)
+
+        # Return to menu
+        self.app.show_menu()
+
+        # Launch Six Degrees of Wikipedia
+        self.app.current_frame.destroy()
+        self.app.current_frame = SixDegreesGame(self.app, return_to_menu_callback=self.app.show_menu, use_network=False)
+        self.assertIsInstance(self.app.current_frame, SixDegreesGame)
 
 
 if __name__ == "__main__":

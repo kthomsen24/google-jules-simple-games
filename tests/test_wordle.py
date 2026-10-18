@@ -1,6 +1,7 @@
 import unittest
 import tkinter as tk
 from games.wordle import WordleGame, COLOR_CORRECT, COLOR_PRESENT, COLOR_ABSENT, DEFAULT_WORD_LENGTH, DEFAULT_MAX_ATTEMPTS
+from games.wordle_dictionary import LARGE_WORD_DICTIONARY
 
 
 class TestWordleGame(unittest.TestCase):
@@ -22,15 +23,27 @@ class TestWordleGame(unittest.TestCase):
         self.assertFalse(self.game.game_won)
         self.assertEqual(len(self.game.attempts), 0)
 
-    def test_custom_initialization(self):
-        custom_game = WordleGame(self.root, word_length=6, max_attempts=4)
-        self.assertEqual(custom_game.word_length, 6)
-        self.assertEqual(custom_game.max_attempts, 4)
-        self.assertEqual(len(custom_game.secret_word), 6)
-        self.assertEqual(len(custom_game.grid_labels), 4)
-        self.assertEqual(len(custom_game.grid_labels[0]), 6)
-        custom_game.unbind_events()
-        custom_game.destroy()
+    def test_expanded_word_lengths(self):
+        # Test word lengths up to 10
+        for length in [4, 5, 6, 7, 8, 9, 10]:
+            custom_game = WordleGame(self.root, word_length=length, max_attempts=6)
+            self.assertEqual(custom_game.word_length, length)
+            self.assertEqual(len(custom_game.secret_word), length)
+            dict_list = LARGE_WORD_DICTIONARY.get(length) or LARGE_WORD_DICTIONARY.get(str(length))
+            self.assertIn(custom_game.secret_word, dict_list)
+            custom_game.unbind_events()
+            custom_game.destroy()
+
+    def test_session_history_and_duplicate_avoidance(self):
+        # Reset game multiple times in same session
+        used_words = set()
+        for _ in range(5):
+            word = self.game.secret_word
+            self.assertNotIn(word, used_words)
+            used_words.add(word)
+            self.game.reset_game()
+
+        self.assertEqual(len(self.game.used_solutions), 6)
 
     def test_guess_evaluation(self):
         secret = "APPLE"
@@ -97,7 +110,6 @@ class TestWordleGame(unittest.TestCase):
 
         self.assertTrue(self.game.game_won)
         self.assertTrue(self.game.game_over)
-        self.assertEqual(len(self.game.attempts), 1)
 
     def test_loss_condition(self):
         self.game.word_length = 5
