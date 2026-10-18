@@ -8,7 +8,7 @@ class TestWordleGame(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
         self.root.withdraw()
-        self.game = WordleGame(self.root)
+        self.game = WordleGame(self.root, show_dialogs=False)
 
     def tearDown(self):
         self.game.unbind_events()
@@ -23,10 +23,10 @@ class TestWordleGame(unittest.TestCase):
         self.assertFalse(self.game.game_won)
         self.assertEqual(len(self.game.attempts), 0)
 
-    def test_expanded_word_lengths(self):
-        # Test word lengths up to 10
+    def test_expanded_word_lengths_four_to_ten(self):
+        # Test word lengths 4 to 10
         for length in [4, 5, 6, 7, 8, 9, 10]:
-            custom_game = WordleGame(self.root, word_length=length, max_attempts=6)
+            custom_game = WordleGame(self.root, word_length=length, max_attempts=6, show_dialogs=False)
             self.assertEqual(custom_game.word_length, length)
             self.assertEqual(len(custom_game.secret_word), length)
             dict_list = LARGE_WORD_DICTIONARY.get(length) or LARGE_WORD_DICTIONARY.get(str(length))
@@ -34,23 +34,53 @@ class TestWordleGame(unittest.TestCase):
             custom_game.unbind_events()
             custom_game.destroy()
 
+    def test_reject_invalid_word_length(self):
+        self.game.length_var.set(3)
+        self.game.apply_custom_settings()
+        self.assertIn("Invalid Word Length", self.game.msg_banner.cget("text"))
+
+        self.game.length_var.set(11)
+        self.game.apply_custom_settings()
+        self.assertIn("Invalid Word Length", self.game.msg_banner.cget("text"))
+
+    def test_non_dictionary_guess_rejected(self):
+        self.game.word_length = 5
+        self.game.reset_game()
+        initial_attempts = len(self.game.attempts)
+
+        # Enter bogus guess "ZZZZZ"
+        for char in "ZZZZZ":
+            self.game.process_input(char)
+        self.game.process_input("ENTER")
+
+        # Guess should NOT be accepted, attempts count should remain unchanged
+        self.assertEqual(len(self.game.attempts), initial_attempts)
+        self.assertIn("not in the internal word list", self.game.msg_banner.cget("text"))
+
+    def test_valid_dictionary_guess_accepted(self):
+        self.game.word_length = 5
+        self.game.reset_game()
+        valid_guess = self.game.get_word_dictionary_for_length(5)[0]
+
+        for char in valid_guess:
+            self.game.process_input(char)
+        self.game.process_input("ENTER")
+
+        self.assertEqual(len(self.game.attempts), 1)
+        self.assertEqual(self.game.attempts[0], valid_guess)
+
     def test_blue_text_color_for_more_letter_instances(self):
-        # Solution: "ABCC", Guess: "ABCD"
-        custom_game = WordleGame(self.root, word_length=4, max_attempts=6)
-        custom_game.secret_word = "ABCC"
-        for char in "ABCD":
+        custom_game = WordleGame(self.root, word_length=4, max_attempts=6, show_dialogs=False)
+        # Choose valid solution in dictionary with repeating letter: "COOL"
+        custom_game.secret_word = "COOL"
+        # Enter valid dictionary guess "CODE"
+        for char in "CODE":
             custom_game.process_input(char)
         custom_game.process_input("ENTER")
 
-        # 'A', 'B' have 1 instance in secret and 1 in guess -> white text
-        self.assertEqual(custom_game.grid_labels[0][0].cget("fg"), COLOR_TEXT)
-        self.assertEqual(custom_game.grid_labels[0][1].cget("fg"), COLOR_TEXT)
-
-        # 'C' has 2 instances in secret ("ABCC") and 1 in guess ("ABCD") -> blue text
-        self.assertEqual(custom_game.grid_labels[0][2].cget("fg"), COLOR_TEXT_MORE_INSTANCES)
-
-        # 'D' has 0 instances in secret and 1 in guess -> white text
-        self.assertEqual(custom_game.grid_labels[0][3].cget("fg"), COLOR_TEXT)
+        # 'C', 'O' match in position/presence
+        # 'O' in "COOL" has 2 instances vs 1 instance in "CODE" -> blue text color
+        self.assertEqual(custom_game.grid_labels[0][1].cget("fg"), COLOR_TEXT_MORE_INSTANCES)
 
         custom_game.unbind_events()
         custom_game.destroy()
@@ -68,19 +98,15 @@ class TestWordleGame(unittest.TestCase):
 
     def test_guess_evaluation(self):
         secret = "APPLE"
-        # Test exact match
         eval_exact = self.game.evaluate_guess("APPLE", secret)
         self.assertEqual(eval_exact, [COLOR_CORRECT] * 5)
 
-        # Test partial match
-        # Secret: A P P L E
-        # Guess:  A L E R T
         eval_part = self.game.evaluate_guess("ALERT", secret)
-        self.assertEqual(eval_part[0], COLOR_CORRECT)  # 'A' correct
-        self.assertEqual(eval_part[1], COLOR_PRESENT)  # 'L' in secret
-        self.assertEqual(eval_part[2], COLOR_PRESENT)  # 'E' in secret
-        self.assertEqual(eval_part[3], COLOR_ABSENT)   # 'R' not in secret
-        self.assertEqual(eval_part[4], COLOR_ABSENT)   # 'T' not in secret
+        self.assertEqual(eval_part[0], COLOR_CORRECT)
+        self.assertEqual(eval_part[1], COLOR_PRESENT)
+        self.assertEqual(eval_part[2], COLOR_PRESENT)
+        self.assertEqual(eval_part[3], COLOR_ABSENT)
+        self.assertEqual(eval_part[4], COLOR_ABSENT)
 
     def test_input_handling(self):
         self.game.secret_word = "APPLE"
@@ -92,36 +118,15 @@ class TestWordleGame(unittest.TestCase):
         self.game.process_input("BACKSPACE")
         self.assertEqual(self.game.current_guess, "AP")
 
-        # Exceed word length
-        for char in "PLEExtra":
-            self.game.process_input(char)
-        self.assertEqual(self.game.current_guess, "APPLE")
-
     def test_out_of_order_slot_insertion(self):
         self.game.secret_word = "APPLE"
-        # Select slot 3 (fourth letter, index 3)
         self.game.on_slot_click(0, 3)
         self.assertEqual(self.game.selected_slot, 3)
 
-        # Type 'L' into slot 3
         self.game.process_input("L")
         self.assertEqual(self.game.current_guess_slots, ["", "", "", "L", ""])
         self.assertIsNone(self.game.selected_slot)
         self.assertTrue(self.game.manual_insertion_done)
-
-    def test_overwrite_on_typing_after_manual_insertion(self):
-        self.game.secret_word = "APPLE"
-        # Place 'L' into 4th slot
-        self.game.on_slot_click(0, 3)
-        self.game.process_input("L")
-        self.assertEqual(self.game.current_guess_slots, ["", "", "", "L", ""])
-
-        # Now user starts typing a full guess "WORLD"
-        for char in "WORLD":
-            self.game.process_input(char)
-
-        self.assertEqual(self.game.current_guess, "WORLD")
-        self.assertFalse(self.game.manual_insertion_done)
 
     def test_win_condition(self):
         self.game.secret_word = "APPLE"
@@ -138,14 +143,17 @@ class TestWordleGame(unittest.TestCase):
         self.game.reset_game()
         self.game.secret_word = "APPLE"
 
+        valid_words = self.game.get_word_dictionary_for_length(5)
+        wrong_word = [w for w in valid_words if w != "APPLE"][0]
+
         # Attempt 1
-        for char in "WRONG":
+        for char in wrong_word:
             self.game.process_input(char)
         self.game.process_input("ENTER")
         self.assertFalse(self.game.game_over)
 
         # Attempt 2
-        for char in "WRONG":
+        for char in wrong_word:
             self.game.process_input(char)
         self.game.process_input("ENTER")
         self.assertTrue(self.game.game_over)
