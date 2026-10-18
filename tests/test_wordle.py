@@ -34,6 +34,12 @@ class TestWordleGame(unittest.TestCase):
             custom_game.unbind_events()
             custom_game.destroy()
 
+    def test_spellchecker_word_validity(self):
+        self.assertTrue(self.game.is_valid_english_word("APPLE"))
+        self.assertTrue(self.game.is_valid_english_word("HOUSE"))
+        self.assertTrue(self.game.is_valid_english_word("PYTHON"))
+        self.assertFalse(self.game.is_valid_english_word("XYZQW"))
+
     def test_reject_invalid_word_length(self):
         self.game.length_var.set(3)
         self.game.apply_custom_settings()
@@ -43,24 +49,24 @@ class TestWordleGame(unittest.TestCase):
         self.game.apply_custom_settings()
         self.assertIn("Invalid Word Length", self.game.msg_banner.cget("text"))
 
-    def test_non_dictionary_guess_rejected(self):
+    def test_non_word_guess_rejected(self):
         self.game.word_length = 5
         self.game.reset_game()
         initial_attempts = len(self.game.attempts)
 
-        # Enter bogus guess "ZZZZZ"
-        for char in "ZZZZZ":
+        # Enter bogus guess "XYZQW"
+        for char in "XYZQW":
             self.game.process_input(char)
         self.game.process_input("ENTER")
 
         # Guess should NOT be accepted, attempts count should remain unchanged
         self.assertEqual(len(self.game.attempts), initial_attempts)
-        self.assertIn("not in the internal word list", self.game.msg_banner.cget("text"))
+        self.assertIn("not a valid English word", self.game.msg_banner.cget("text"))
 
-    def test_valid_dictionary_guess_accepted(self):
+    def test_valid_word_guess_accepted(self):
         self.game.word_length = 5
         self.game.reset_game()
-        valid_guess = self.game.get_word_dictionary_for_length(5)[0]
+        valid_guess = "APPLE"
 
         for char in valid_guess:
             self.game.process_input(char)
@@ -71,22 +77,17 @@ class TestWordleGame(unittest.TestCase):
 
     def test_blue_text_color_for_more_letter_instances(self):
         custom_game = WordleGame(self.root, word_length=4, max_attempts=6, show_dialogs=False)
-        # Choose valid solution in dictionary with repeating letter: "COOL"
         custom_game.secret_word = "COOL"
-        # Enter valid dictionary guess "CODE"
         for char in "CODE":
             custom_game.process_input(char)
         custom_game.process_input("ENTER")
 
-        # 'C', 'O' match in position/presence
-        # 'O' in "COOL" has 2 instances vs 1 instance in "CODE" -> blue text color
         self.assertEqual(custom_game.grid_labels[0][1].cget("fg"), COLOR_TEXT_MORE_INSTANCES)
 
         custom_game.unbind_events()
         custom_game.destroy()
 
     def test_session_history_and_duplicate_avoidance(self):
-        # Reset game multiple times in same session
         used_words = set()
         for _ in range(5):
             word = self.game.secret_word
@@ -143,8 +144,7 @@ class TestWordleGame(unittest.TestCase):
         self.game.reset_game()
         self.game.secret_word = "APPLE"
 
-        valid_words = self.game.get_word_dictionary_for_length(5)
-        wrong_word = [w for w in valid_words if w != "APPLE"][0]
+        wrong_word = "SMART"
 
         # Attempt 1
         for char in wrong_word:

@@ -3,7 +3,11 @@ import random
 import time
 import tkinter as tk
 from tkinter import messagebox
+from spellchecker import SpellChecker
 from games.wordle_dictionary import LARGE_WORD_DICTIONARY
+
+# Initialize spell checker
+SPELL = SpellChecker()
 
 # Default game parameters
 DEFAULT_WORD_LENGTH = 5
@@ -73,6 +77,21 @@ class WordleGame(tk.Frame):
         if not dict_list:
             dict_list = FALLBACK_WORD_DICTIONARY.get(length, FALLBACK_WORD_DICTIONARY[5])
         return [w.upper() for w in dict_list]
+
+    def is_valid_english_word(self, word):
+        word_upper = word.upper()
+        word_lower = word.lower()
+
+        # Check spell checker dictionary first
+        if word_lower in SPELL:
+            return True
+
+        # Check internal hardcoded dictionary lists
+        valid_words = self.get_word_dictionary_for_length(len(word))
+        if word_upper in valid_words:
+            return True
+
+        return False
 
     def setup_ui(self):
         self.pack(fill=tk.BOTH, expand=True)
@@ -454,10 +473,9 @@ class WordleGame(tk.Frame):
 
         guess = "".join(self.current_guess_slots)
 
-        # Check if guess is present in the internal word dictionary
-        valid_words = self.get_word_dictionary_for_length(self.word_length)
-        if guess not in valid_words:
-            msg = f"'{guess}' is not in the internal word list! Please enter a valid English word."
+        # Check if guess is a valid English word using spellchecker or internal lists
+        if not self.is_valid_english_word(guess):
+            msg = f"'{guess}' is not a valid English word! Please try again."
             self.msg_banner.config(text=msg, fg="#e74c3c")
             if self.show_dialogs:
                 messagebox.showwarning("Not a Valid Word", msg)
