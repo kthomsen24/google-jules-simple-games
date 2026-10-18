@@ -21,7 +21,6 @@ COLOR_TEXT_MORE_INSTANCES = "#3498db" # Blue text color when secret contains mor
 
 # Simple fallback dictionary
 FALLBACK_WORD_DICTIONARY = {
-    3: ["CAT", "DOG", "SUN", "HAT", "BUS", "MAP", "PEN", "FLY", "RED", "BOX", "CUP", "BAG", "FOX", "WIN", "KEY"],
     4: ["WORD", "GAME", "PLAY", "CODE", "COOL", "FIRE", "BLUE", "STAR", "FISH", "MOON", "RAIN", "TIME", "MIND", "BEAR", "TREE"],
     5: ["APPLE", "BRAIN", "CHAIR", "DANCE", "EAGLE", "FLAME", "GRAPE", "HOUSE", "LIGHT", "MUSIC", "PLANT", "SNAKE", "TABLE", "WATER", "WORLD", "REACT", "SMART", "FLASH", "CLOUD", "PIANO"],
     6: ["BANANA", "CASTLE", "DRAGON", "FLOWER", "PLANET", "ROCKET", "SILVER", "SUMMER", "WINTER", "BRIDGE", "GUITAR", "PURPLE", "FOREST", "SPRING", "MONKEY"],
@@ -31,12 +30,13 @@ FALLBACK_WORD_DICTIONARY = {
 
 
 class WordleGame(tk.Frame):
-    def __init__(self, parent, return_to_menu_callback=None, word_length=DEFAULT_WORD_LENGTH, max_attempts=DEFAULT_MAX_ATTEMPTS):
+    def __init__(self, parent, return_to_menu_callback=None, word_length=DEFAULT_WORD_LENGTH, max_attempts=DEFAULT_MAX_ATTEMPTS, show_dialogs=True):
         super().__init__(parent, bg="#121213")
         self.parent = parent
         self.return_to_menu_callback = return_to_menu_callback
+        self.show_dialogs = show_dialogs
 
-        self.word_length = word_length
+        self.word_length = max(4, min(10, word_length))
         self.max_attempts = max_attempts
 
         self.secret_word = ""
@@ -67,6 +67,12 @@ class WordleGame(tk.Frame):
         for i, char in enumerate(value[:self.word_length]):
             self.current_guess_slots[i] = char.upper()
         self.update_current_row_display()
+
+    def get_word_dictionary_for_length(self, length):
+        dict_list = LARGE_WORD_DICTIONARY.get(length) or LARGE_WORD_DICTIONARY.get(str(length))
+        if not dict_list:
+            dict_list = FALLBACK_WORD_DICTIONARY.get(length, FALLBACK_WORD_DICTIONARY[5])
+        return [w.upper() for w in dict_list]
 
     def setup_ui(self):
         self.pack(fill=tk.BOTH, expand=True)
@@ -117,7 +123,7 @@ class WordleGame(tk.Frame):
 
         length_label = tk.Label(
             self.custom_frame,
-            text="Word Length:",
+            text="Word Length (4-10):",
             font=("Helvetica", 10, "bold"),
             fg="#ecf0f1",
             bg="#121213",
@@ -127,7 +133,7 @@ class WordleGame(tk.Frame):
         self.length_var = tk.IntVar(value=self.word_length)
         self.length_spin = tk.Spinbox(
             self.custom_frame,
-            from_=3,
+            from_=4,
             to=10,
             textvariable=self.length_var,
             width=3,
@@ -170,16 +176,37 @@ class WordleGame(tk.Frame):
         )
         self.apply_btn.pack(side=tk.LEFT, padx=15)
 
-        # Hint Banner for Blue Font Indicator
+        # Info & Hint Banners
+        self.rule_label = tk.Label(
+            self,
+            text="ℹ️ Word lengths must be 4 to 10 letters. Guesses must be valid English words.",
+            font=("Helvetica", 9),
+            fg="#bdc3c7",
+            bg="#121213",
+            pady=1,
+        )
+        self.rule_label.pack()
+
         self.hint_label = tk.Label(
             self,
             text="💡 Blue font indicates the secret word contains more instances of that letter.",
             font=("Helvetica", 9, "italic"),
             fg="#3498db",
             bg="#121213",
-            pady=2,
+            pady=1,
         )
         self.hint_label.pack()
+
+        # Feedback/Error Banner
+        self.msg_banner = tk.Label(
+            self,
+            text="",
+            font=("Helvetica", 10, "bold"),
+            fg="#e74c3c",
+            bg="#121213",
+            pady=2,
+        )
+        self.msg_banner.pack()
 
         # Grid Container
         self.grid_container = tk.Frame(self, bg="#121213")
@@ -187,7 +214,7 @@ class WordleGame(tk.Frame):
 
         # Onscreen Keyboard Container
         self.keyboard_frame = tk.Frame(self, bg="#121213")
-        self.keyboard_frame.pack(side=tk.BOTTOM, pady=15)
+        self.keyboard_frame.pack(side=tk.BOTTOM, pady=10)
 
         self.bind_events()
 
@@ -201,18 +228,28 @@ class WordleGame(tk.Frame):
         try:
             length = int(self.length_var.get())
             attempts = int(self.attempts_var.get())
-            if 3 <= length <= 10 and 1 <= attempts <= 10:
-                self.word_length = length
-                self.max_attempts = attempts
-                self.reset_game()
+            if not (4 <= length <= 10):
+                msg = f"Invalid Word Length ({length})! Only English words of 4 to 10 letters are supported."
+                self.msg_banner.config(text=msg, fg="#e74c3c")
+                if self.show_dialogs:
+                    messagebox.showerror("Invalid Word Length", msg)
+                return
+            if not (1 <= attempts <= 10):
+                msg = "Max attempts must be between 1 and 10."
+                self.msg_banner.config(text=msg, fg="#e74c3c")
+                if self.show_dialogs:
+                    messagebox.showerror("Invalid Attempts", msg)
+                return
+
+            self.msg_banner.config(text="")
+            self.word_length = length
+            self.max_attempts = attempts
+            self.reset_game()
         except ValueError:
             pass
 
     def select_secret_word(self):
-        # Fetch candidate word list for requested word length
-        candidates = LARGE_WORD_DICTIONARY.get(self.word_length) or LARGE_WORD_DICTIONARY.get(str(self.word_length))
-        if not candidates:
-            candidates = FALLBACK_WORD_DICTIONARY.get(self.word_length, FALLBACK_WORD_DICTIONARY[5])
+        candidates = self.get_word_dictionary_for_length(self.word_length)
 
         # Filter out words that have already been used in this session
         unused_candidates = [w for w in candidates if w not in self.used_solutions]
@@ -241,6 +278,7 @@ class WordleGame(tk.Frame):
         self.game_over = False
         self.game_won = False
         self.key_status = {}
+        self.msg_banner.config(text="")
 
         self.rebuild_grid()
         self.rebuild_keyboard()
@@ -338,6 +376,7 @@ class WordleGame(tk.Frame):
         if key == "ENTER":
             self.submit_guess()
         elif key == "BACKSPACE":
+            self.msg_banner.config(text="")
             if self.manual_insertion_done:
                 self.current_guess_slots = [""] * self.word_length
                 self.manual_insertion_done = False
@@ -352,6 +391,7 @@ class WordleGame(tk.Frame):
                         break
             self.update_current_row_display()
         else:  # A-Z Letter input
+            self.msg_banner.config(text="")
             if self.manual_insertion_done and self.selected_slot is None:
                 # User starts typing after manual insertion -> overwrite attempt
                 self.current_guess_slots = [""] * self.word_length
@@ -413,6 +453,17 @@ class WordleGame(tk.Frame):
             return
 
         guess = "".join(self.current_guess_slots)
+
+        # Check if guess is present in the internal word dictionary
+        valid_words = self.get_word_dictionary_for_length(self.word_length)
+        if guess not in valid_words:
+            msg = f"'{guess}' is not in the internal word list! Please enter a valid English word."
+            self.msg_banner.config(text=msg, fg="#e74c3c")
+            if self.show_dialogs:
+                messagebox.showwarning("Not a Valid Word", msg)
+            return
+
+        self.msg_banner.config(text="")
         row_idx = len(self.attempts)
         self.attempts.append(guess)
 
