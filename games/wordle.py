@@ -1,6 +1,9 @@
+import hashlib
 import random
+import time
 import tkinter as tk
 from tkinter import messagebox
+from games.wordle_dictionary import LARGE_WORD_DICTIONARY
 
 # Default game parameters
 DEFAULT_WORD_LENGTH = 5
@@ -15,8 +18,8 @@ COLOR_BORDER = "#3a3a3c"     # Grid border color
 COLOR_SELECTED = "#3498db"   # Border color for selected slot
 COLOR_TEXT = "#ffffff"       # Text color
 
-# Simple built-in word lists per word length (all uppercase)
-WORD_DICTIONARY = {
+# Simple fallback dictionary
+FALLBACK_WORD_DICTIONARY = {
     3: ["CAT", "DOG", "SUN", "HAT", "BUS", "MAP", "PEN", "FLY", "RED", "BOX", "CUP", "BAG", "FOX", "WIN", "KEY"],
     4: ["WORD", "GAME", "PLAY", "CODE", "COOL", "FIRE", "BLUE", "STAR", "FISH", "MOON", "RAIN", "TIME", "MIND", "BEAR", "TREE"],
     5: ["APPLE", "BRAIN", "CHAIR", "DANCE", "EAGLE", "FLAME", "GRAPE", "HOUSE", "LIGHT", "MUSIC", "PLANT", "SNAKE", "TABLE", "WATER", "WORLD", "REACT", "SMART", "FLASH", "CLOUD", "PIANO"],
@@ -43,6 +46,9 @@ class WordleGame(tk.Frame):
 
         self.game_over = False
         self.game_won = False
+
+        # Session history tracking solutions used in current session
+        self.used_solutions = []
 
         # Virtual Keyboard key statuses: letter -> color
         self.key_status = {}
@@ -121,7 +127,7 @@ class WordleGame(tk.Frame):
         self.length_spin = tk.Spinbox(
             self.custom_frame,
             from_=3,
-            to=8,
+            to=10,
             textvariable=self.length_var,
             width=3,
             font=("Helvetica", 10),
@@ -183,7 +189,7 @@ class WordleGame(tk.Frame):
         try:
             length = int(self.length_var.get())
             attempts = int(self.attempts_var.get())
-            if 3 <= length <= 8 and 1 <= attempts <= 10:
+            if 3 <= length <= 10 and 1 <= attempts <= 10:
                 self.word_length = length
                 self.max_attempts = attempts
                 self.reset_game()
@@ -191,8 +197,28 @@ class WordleGame(tk.Frame):
             pass
 
     def select_secret_word(self):
-        words = WORD_DICTIONARY.get(self.word_length, WORD_DICTIONARY[5])
-        return random.choice(words).upper()
+        # Fetch candidate word list for requested word length
+        candidates = LARGE_WORD_DICTIONARY.get(self.word_length) or LARGE_WORD_DICTIONARY.get(str(self.word_length))
+        if not candidates:
+            candidates = FALLBACK_WORD_DICTIONARY.get(self.word_length, FALLBACK_WORD_DICTIONARY[5])
+
+        # Filter out words that have already been used in this session
+        unused_candidates = [w for w in candidates if w not in self.used_solutions]
+        if not unused_candidates:
+            # If all candidates used, fall back to full candidate list
+            unused_candidates = list(candidates)
+
+        # Hash Unix epoch time and session solution history to seed PRNG
+        epoch_now = time.time()
+        time_ns = time.time_ns()
+        seed_raw = f"{epoch_now}:{time_ns}:{','.join(self.used_solutions)}:{random.randint(0, 1000000)}".encode("utf-8")
+        seed_hash = hashlib.sha256(seed_raw).hexdigest()
+        seed_int = int(seed_hash, 16)
+
+        rng = random.Random(seed_int)
+        chosen = rng.choice(unused_candidates).upper()
+        self.used_solutions.append(chosen)
+        return chosen
 
     def reset_game(self):
         self.secret_word = self.select_secret_word()
