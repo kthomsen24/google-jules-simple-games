@@ -1,6 +1,6 @@
 import unittest
 import tkinter as tk
-from games.wordle import WordleGame, COLOR_CORRECT, COLOR_PRESENT, COLOR_ABSENT, DEFAULT_WORD_LENGTH, DEFAULT_MAX_ATTEMPTS
+from games.wordle import WordleGame, COLOR_CORRECT, COLOR_PRESENT, COLOR_ABSENT, COLOR_TEXT, COLOR_TEXT_MORE_INSTANCES, DEFAULT_WORD_LENGTH, DEFAULT_MAX_ATTEMPTS
 from games.wordle_dictionary import LARGE_WORD_DICTIONARY
 
 
@@ -33,6 +33,27 @@ class TestWordleGame(unittest.TestCase):
             self.assertIn(custom_game.secret_word, dict_list)
             custom_game.unbind_events()
             custom_game.destroy()
+
+    def test_blue_text_color_for_more_letter_instances(self):
+        # Solution: "ABCC", Guess: "ABCD"
+        custom_game = WordleGame(self.root, word_length=4, max_attempts=6)
+        custom_game.secret_word = "ABCC"
+        for char in "ABCD":
+            custom_game.process_input(char)
+        custom_game.process_input("ENTER")
+
+        # 'A', 'B' have 1 instance in secret and 1 in guess -> white text
+        self.assertEqual(custom_game.grid_labels[0][0].cget("fg"), COLOR_TEXT)
+        self.assertEqual(custom_game.grid_labels[0][1].cget("fg"), COLOR_TEXT)
+
+        # 'C' has 2 instances in secret ("ABCC") and 1 in guess ("ABCD") -> blue text
+        self.assertEqual(custom_game.grid_labels[0][2].cget("fg"), COLOR_TEXT_MORE_INSTANCES)
+
+        # 'D' has 0 instances in secret and 1 in guess -> white text
+        self.assertEqual(custom_game.grid_labels[0][3].cget("fg"), COLOR_TEXT)
+
+        custom_game.unbind_events()
+        custom_game.destroy()
 
     def test_session_history_and_duplicate_avoidance(self):
         # Reset game multiple times in same session

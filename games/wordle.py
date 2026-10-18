@@ -16,7 +16,8 @@ COLOR_ABSENT = "#3a3a3c"     # Dark Gray
 COLOR_DEFAULT = "#121213"    # Dark background for empty/editing tiles
 COLOR_BORDER = "#3a3a3c"     # Grid border color
 COLOR_SELECTED = "#3498db"   # Border color for selected slot
-COLOR_TEXT = "#ffffff"       # Text color
+COLOR_TEXT = "#ffffff"       # Standard text color
+COLOR_TEXT_MORE_INSTANCES = "#3498db" # Blue text color when secret contains more instances of letter
 
 # Simple fallback dictionary
 FALLBACK_WORD_DICTIONARY = {
@@ -112,7 +113,7 @@ class WordleGame(tk.Frame):
 
         # Customization Panel
         self.custom_frame = tk.Frame(self, bg="#121213")
-        self.custom_frame.pack(fill=tk.X, pady=10)
+        self.custom_frame.pack(fill=tk.X, pady=5)
 
         length_label = tk.Label(
             self.custom_frame,
@@ -169,9 +170,20 @@ class WordleGame(tk.Frame):
         )
         self.apply_btn.pack(side=tk.LEFT, padx=15)
 
+        # Hint Banner for Blue Font Indicator
+        self.hint_label = tk.Label(
+            self,
+            text="💡 Blue font indicates the secret word contains more instances of that letter.",
+            font=("Helvetica", 9, "italic"),
+            fg="#3498db",
+            bg="#121213",
+            pady=2,
+        )
+        self.hint_label.pack()
+
         # Grid Container
         self.grid_container = tk.Frame(self, bg="#121213")
-        self.grid_container.pack(expand=True, pady=10)
+        self.grid_container.pack(expand=True, pady=5)
 
         # Onscreen Keyboard Container
         self.keyboard_frame = tk.Frame(self, bg="#121213")
@@ -365,7 +377,7 @@ class WordleGame(tk.Frame):
         for c in range(self.word_length):
             lbl = self.grid_labels[row_idx][c]
             letter = self.current_guess_slots[c]
-            lbl.config(text=letter)
+            lbl.config(text=letter, fg=COLOR_TEXT)
 
             if c == self.selected_slot:
                 lbl.config(highlightbackground=COLOR_SELECTED, highlightthickness=2)
@@ -409,10 +421,16 @@ class WordleGame(tk.Frame):
         # Update Grid Tiles for current row
         for c in range(self.word_length):
             lbl = self.grid_labels[row_idx][c]
-            lbl.config(bg=colors[c], fg="#ffffff", highlightbackground=COLOR_BORDER, highlightthickness=1)
+            letter = guess[c]
+
+            # If secret_word has strictly more occurrences of this letter than the guess, set text color to blue
+            secret_count = self.secret_word.count(letter)
+            guess_count = guess.count(letter)
+            text_color = COLOR_TEXT_MORE_INSTANCES if secret_count > guess_count else COLOR_TEXT
+
+            lbl.config(bg=colors[c], fg=text_color, highlightbackground=COLOR_BORDER, highlightthickness=1)
 
             # Update key statuses
-            letter = guess[c]
             current_status = self.key_status.get(letter, COLOR_DEFAULT)
             # Precedence: Correct > Present > Absent
             if colors[c] == COLOR_CORRECT:
