@@ -95,6 +95,7 @@ class SixDegreesGame(tk.Frame):
         self.chain_length = 6
         self.max_attempts = 6
         self.infinite_attempts = False
+        self.sort_order = "Article Order"
 
         # Game State
         self.start_page = ""
@@ -240,6 +241,17 @@ class SixDegreesGame(tk.Frame):
         )
         self.chain_frame.pack(fill=tk.X, padx=15, pady=5)
 
+        # Counter Label for Chain Length
+        self.chain_count_label = tk.Label(
+            self.chain_frame,
+            text="Chain: 0 / Target: 6",
+            font=("Helvetica", 10, "bold"),
+            fg="#f39c12",
+            bg="#1a252f",
+            padx=5,
+        )
+        self.chain_count_label.pack(side=tk.TOP, anchor="w", pady=(0, 2))
+
         self.chain_label = tk.Label(
             self.chain_frame,
             text="",
@@ -253,7 +265,7 @@ class SixDegreesGame(tk.Frame):
 
         self.undo_btn = tk.Button(
             self.chain_frame,
-            text="↩ Undo Step",
+            text="↩ Undo Move",
             command=self.undo_step,
             bg="#e67e22",
             fg="white",
@@ -263,10 +275,52 @@ class SixDegreesGame(tk.Frame):
         )
         self.undo_btn.pack(side=tk.RIGHT)
 
-        # Links Selector Listbox with scrollbar
-        self.links_frame = tk.LabelFrame(
-            self, text="Links in Current Opening Text (Double click or Select & Click Add)", bg="#1a252f", fg="#bdc3c7", font=("Helvetica", 9, "bold"), padx=10, pady=5
+        # Links Selector Header Frame (Listbox title & Sort controls)
+        self.links_header_frame = tk.Frame(self, bg="#1a252f")
+        self.links_header_frame.pack(fill=tk.X, padx=15, pady=(5, 0))
+
+        tk.Label(
+            self.links_header_frame,
+            text="Opening Text Links:",
+            font=("Helvetica", 10, "bold"),
+            fg="#bdc3c7",
+            bg="#1a252f",
+        ).pack(side=tk.LEFT)
+
+        # Sorting Options
+        tk.Label(
+            self.links_header_frame,
+            text="Sort:",
+            font=("Helvetica", 9, "bold"),
+            fg="#bdc3c7",
+            bg="#1a252f",
+        ).pack(side=tk.LEFT, padx=(15, 2))
+
+        self.sort_var = tk.StringVar(value="Article Order")
+        self.sort_menu = tk.OptionMenu(
+            self.links_header_frame,
+            self.sort_var,
+            "Article Order",
+            "Alphabetical (A-Z)",
+            "Alphabetical (Z-A)",
+            command=self.on_sort_change,
         )
+        self.sort_menu.config(
+            font=("Helvetica", 8, "bold"),
+            bg="#34495e",
+            fg="white",
+            activebackground="#2c3e50",
+            activeforeground="white",
+            bd=1,
+            highlightthickness=0,
+            padx=4,
+            pady=1,
+        )
+        self.sort_menu["menu"].config(bg="#2c3e50", fg="white")
+        self.sort_menu.pack(side=tk.LEFT)
+
+        # Links Selector Listbox with scrollbar
+        self.links_frame = tk.Frame(self, bg="#1a252f")
         self.links_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
 
         self.scrollbar = tk.Scrollbar(self.links_frame)
@@ -316,6 +370,10 @@ class SixDegreesGame(tk.Frame):
 
     def on_config_change(self):
         pass
+
+    def on_sort_change(self, value):
+        self.sort_order = value
+        self.update_listbox_display()
 
     def apply_settings_and_reset(self):
         try:
@@ -386,15 +444,15 @@ class SixDegreesGame(tk.Frame):
             text=f"Connect: '{self.start_page}' ➔ '{self.target_page}' (Max Chain: {self.chain_length})"
         )
 
+        current_chain_len = len(self.chain) - 1
+        self.chain_count_label.config(text=f"Chain Length: {current_chain_len} / Max: {self.chain_length}")
+
         chain_str = " ➔ ".join(self.chain)
         self.chain_label.config(text=chain_str)
 
         self.status_label.config(text=f"Attempts Used: {attempts_str}")
 
-        # Update Listbox
-        self.links_listbox.delete(0, tk.END)
-        for link in self.current_links:
-            self.links_listbox.insert(tk.END, link)
+        self.update_listbox_display()
 
         # Check Win / Loss condition
         if curr_page.lower() == self.target_page.lower():
@@ -406,6 +464,17 @@ class SixDegreesGame(tk.Frame):
         elif not self.infinite_attempts and self.attempts_used >= self.max_attempts:
             self.game_over = True
             self.status_label.config(text="❌ Game Over! Max Attempts Reached.", fg="#e74c3c")
+
+    def update_listbox_display(self):
+        links_to_show = list(self.current_links)
+        if self.sort_order == "Alphabetical (A-Z)":
+            links_to_show.sort()
+        elif self.sort_order == "Alphabetical (Z-A)":
+            links_to_show.sort(reverse=True)
+
+        self.links_listbox.delete(0, tk.END)
+        for link in links_to_show:
+            self.links_listbox.insert(tk.END, link)
 
     def follow_selected_link(self):
         if self.game_over:
@@ -428,6 +497,7 @@ class SixDegreesGame(tk.Frame):
             return
 
         self.chain.pop()
+        self.attempts_used = max(0, self.attempts_used - 1)
         self.update_game_state()
 
     def return_to_menu(self):
